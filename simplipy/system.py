@@ -1,12 +1,21 @@
-"""Define a SimpliSafe system (attached to a location)."""
+"""Define V2 and V3 SimpliSafe systems."""
+import asyncio
 import logging
 from enum import Enum
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
+from .errors import InvalidCredentialsError, PinError, SimplipyError
 from .sensor import SensorV2, SensorV3
 from .util.string import convert_to_underscore
 
 _LOGGER = logging.getLogger(__name__)
+
+CONF_DURESS_PIN = "duress"
+CONF_MASTER_PIN = "master"
+
+DEFAULT_MAX_USER_PINS = 4
+
+RESERVED_PIN_LABELS = (CONF_DURESS_PIN, CONF_MASTER_PIN)
 
 
 class SystemStates(Enum):
@@ -81,6 +90,10 @@ class System:
             _LOGGER.error("Unknown system state: %s", value)
             return SystemStates.unknown
 
+    async def _send_updated_pins(self, pins: dict) -> None:
+        """Post new PINs."""
+        raise NotImplementedError()
+
     async def _set_state(self, value: SystemStates) -> None:
         """Raise if calling this undefined based method."""
         raise NotImplementedError()
@@ -97,6 +110,14 @@ class System:
         self._state = self._coerce_state_from_string(
             location_info["system"]["alarmState"]
         )
+
+    async def _update_sensors(self, cached: bool = True) -> None:
+        """Update sensors to the latest values."""
+        raise NotImplementedError()
+
+    async def _update_settings(self, cached: bool = True) -> None:
+        """Update system settings."""
+        pass
 
     async def get_events(
         self, from_timestamp: int = None, num_events: int = None
@@ -116,6 +137,29 @@ class System:
 
         return events_resp["events"]
 
+    async def get_pins(self, cached: bool = True) -> dict:
+        """Return all of the set PINs, including master and duress."""
+        raise NotImplementedError()
+
+    async def remove_pin(self, pin_or_label: str) -> None:
+        """Remove a PIN by its value or label."""
+        # Because SimpliSafe's API works by sending the entire payload of PINs, we
+        # can't reasonably check a local cache for up-to-date PIN data; so, we fetch the
+        # latest each time.
+        latest_pins = await self.get_pins(cached=False)
+
+        if pin_or_label in RESERVED_PIN_LABELS:
+            raise PinError("Refusing to delete reserved PIN: {0}".format(pin_or_label))
+
+        try:
+            label = next((k for k, v in latest_pins.items() if pin_or_label in (k, v)))
+        except StopIteration:
+            raise PinError("Cannot delete nonexistent PIN: {0}".format(pin_or_label))
+
+        del latest_pins[label]
+
+        await self._send_updated_pins(latest_pins)
+
     async def set_away(self) -> None:
         """Set the system in "Away" mode."""
         await self._set_state(SystemStates.away)
@@ -128,13 +172,77 @@ class System:
         """Set the system in "Off" mode."""
         await self._set_state(SystemStates.off)
 
+    async def set_pin(self, label: str, pin: str) -> None:
+        """Set a PIN."""
+        # Because SimpliSafe's API works by sending the entire payload of PINs, we
+        # can't reasonably check a local cache for up-to-date PIN data; so, we fetch the
+        # latest each time.
+        latest_pins = await self.get_pins(cached=False)
+
+        if pin in latest_pins.values():
+            raise PinError("Refusing to create duplicate PIN: {0}".format(pin))
+
+        max_pins = DEFAULT_MAX_USER_PINS + len(RESERVED_PIN_LABELS)
+        if len(latest_pins) == max_pins and label not in RESERVED_PIN_LABELS:
+            raise PinError(
+                "Refusing to create more than {0} user PINs".format(max_pins)
+            )
+
+        latest_pins[label] = pin
+
+        await self._send_updated_pins(latest_pins)
+
     async def update(self, refresh_location: bool = True, cached: bool = True) -> None:
-        """Raise if calling this undefined based method."""
-        raise NotImplementedError()
+        """Update to the latest data (including sensors)."""
+        tasks = {
+            "sensors": self._update_sensors(cached),
+            "settings": self._update_settings(cached),
+        }
+        if refresh_location:
+            tasks[  # pylint: disable=assignment-from-no-return
+                "location"
+            ] = self._update_location_info()
+
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        for operation, result in zip(tasks, results):
+            if isinstance(result, InvalidCredentialsError):
+                raise result
+            if isinstance(result, SimplipyError):
+                _LOGGER.error("Error while retrieving %s: %s", operation, result)
 
 
 class SystemV2(System):
     """Define a V2 (original) system."""
+
+    @staticmethod
+    def _create_pin_payload(pins: dict) -> dict:
+        """Transform the internal PINs structure to a V2-compatible payload."""
+        payload = {
+            "pins": {
+                CONF_DURESS_PIN: {"value": pins.pop(CONF_DURESS_PIN)},
+                "pin1": {"value": pins.pop(CONF_MASTER_PIN)},
+            }
+        }
+
+        for idx, (label, pin) in enumerate(pins.items()):
+            payload["pins"]["pin{0}".format(idx + 2)] = {"name": label, "value": pin}
+
+        empty_user_index = len(pins)
+        for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
+            payload["pins"]["pin{0}".format(str(idx + 2 + empty_user_index))] = {
+                "name": "",
+                "pin": "",
+            }
+
+        return payload
+
+    async def _send_updated_pins(self, pins: dict) -> None:
+        """Post new PINs."""
+        await self.api.request(
+            "post",
+            "subscriptions/{0}/pins".format(self.system_id),
+            json=self._create_pin_payload(pins),
+        )
 
     async def _set_state(self, value: Enum) -> None:
         """Set the state of the system."""
@@ -155,11 +263,8 @@ class SystemV2(System):
         if state_resp["success"]:
             self._state = SystemStates[state_resp["requestedState"]]
 
-    async def update(self, refresh_location: bool = True, cached: bool = True) -> None:
-        """Update to the latest data (including sensors)."""
-        if refresh_location:
-            await self._update_location_info()
-
+    async def _update_sensors(self, cached: bool = True) -> None:
+        """Update sensors to the latest values."""
         sensor_resp = await self.api.request(
             "get",
             "subscriptions/{0}/settings".format(self.system_id),
@@ -181,9 +286,133 @@ class SystemV2(System):
             else:
                 self.sensors[sensor_data["serial"]] = SensorV2(sensor_data)
 
+    async def get_pins(self, cached: bool = True) -> Dict[str, str]:
+        """Return all of the set PINs, including master and duress."""
+        pins_resp = await self.api.request(
+            "get",
+            "subscriptions/{0}/pins".format(self.system_id),
+            params={"settingsType": "all", "cached": str(cached).lower()},
+        )
+
+        pins = {
+            CONF_MASTER_PIN: pins_resp["pins"].pop("pin1")["value"],
+            CONF_DURESS_PIN: pins_resp["pins"].pop("duress")["value"],
+        }
+
+        for user_pin in [p for p in pins_resp["pins"].values() if p["value"]]:
+            pins[user_pin["name"]] = user_pin["value"]
+
+        return pins
+
 
 class SystemV3(System):
     """Define a V3 (new) system."""
+
+    def __init__(self, api, location_info: dict) -> None:
+        """Initialize."""
+        super().__init__(api, location_info)
+        self._settings_info = {}  # type: Dict[str, Any]
+
+    @property
+    def alarm_duration(self) -> int:
+        """Return the number of seconds an activated alarm will sound for."""
+        return self._settings_info["settings"]["normal"]["alarmDuration"]
+
+    @property
+    def alarm_volume(self) -> int:
+        """Return the loudness of the alarm volume."""
+        return self._settings_info["settings"]["normal"]["alarmVolume"]
+
+    @property
+    def battery_backup_power_level(self) -> int:
+        """Return the power rating of the battery backup."""
+        return self._settings_info["basestationStatus"]["backupBattery"]
+
+    @property
+    def entry_delay_away(self) -> int:
+        """Return the number of seconds to delay when returning to an "away" alarm."""
+        return self._settings_info["settings"]["normal"]["entryDelayAway"]
+
+    @property
+    def entry_delay_home(self) -> int:
+        """Return the number of seconds to delay when returning to an "home" alarm."""
+        return self._settings_info["settings"]["normal"]["entryDelayHome"]
+
+    @property
+    def exit_delay_away(self) -> int:
+        """Return the number of seconds to delay when exiting an "away" alarm."""
+        return self._settings_info["settings"]["normal"]["exitDelayAway"]
+
+    @property
+    def exit_delay_home(self) -> int:
+        """Return the number of seconds to delay when exiting an "home" alarm."""
+        return self._settings_info["settings"]["normal"]["exitDelayHome"]
+
+    @property
+    def gsm_strength(self) -> int:
+        """Return the signal strength of the cell antenna."""
+        return self._settings_info["basestationStatus"]["gsmRssi"]
+
+    @property
+    def light(self) -> bool:
+        """Return whether the base station light is on."""
+        return self._settings_info["settings"]["normal"]["light"]
+
+    @property
+    def rf_jamming(self) -> bool:
+        """Return whether the base station is noticing RF jamming."""
+        return self._settings_info["basestationStatus"]["rfJamming"]
+
+    @property
+    def voice_prompt_volume(self) -> int:
+        """Return the loudness of the voice prompt."""
+        return self._settings_info["settings"]["normal"]["voicePrompts"]
+
+    @property
+    def wall_power_level(self) -> int:
+        """Return the power rating of the A/C outlet."""
+        return self._settings_info["basestationStatus"]["wallPower"]
+
+    @property
+    def wifi_ssid(self) -> str:
+        """Return the ssid of the base station."""
+        return self._settings_info["settings"]["normal"]["wifiSSID"]
+
+    @property
+    def wifi_strength(self) -> int:
+        """Return the signal strength of the wifi antenna."""
+        return self._settings_info["basestationStatus"]["wifiRssi"]
+
+    @staticmethod
+    def _create_pin_payload(pins: dict) -> dict:
+        """Transform the internal PINs structure to a V3-compatible payload."""
+        payload = {
+            "pins": {
+                CONF_DURESS_PIN: {"pin": pins.pop(CONF_DURESS_PIN)},
+                CONF_MASTER_PIN: {"pin": pins.pop(CONF_MASTER_PIN)},
+                "users": {},
+            }
+        }  # type: Dict[str, Any]
+
+        for idx, (label, pin) in enumerate(pins.items()):
+            payload["pins"]["users"][str(idx)] = {"name": label, "pin": pin}
+
+        empty_user_index = len(pins)
+        for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
+            payload["pins"]["users"][str(idx + empty_user_index)] = {
+                "name": "",
+                "pin": "",
+            }
+
+        return payload
+
+    async def _send_updated_pins(self, pins: dict) -> None:
+        """Post new PINs."""
+        self._settings_info = await self.api.request(
+            "post",
+            "ss3/subscriptions/{0}/settings/pins".format(self.system_id),
+            json=self._create_pin_payload(pins),
+        )
 
     async def _set_state(self, value: Enum) -> None:
         """Set the state of the system."""
@@ -201,11 +430,8 @@ class SystemV3(System):
 
         self._state = self._coerce_state_from_string(state_resp["state"])
 
-    async def update(self, refresh_location: bool = True, cached: bool = True) -> None:
-        """Update sensor data."""
-        if refresh_location:
-            await self._update_location_info()
-
+    async def _update_sensors(self, cached: bool = True) -> None:
+        """Update sensors to the latest values."""
         sensor_resp = await self.api.request(
             "get",
             "ss3/subscriptions/{0}/sensors".format(self.system_id),
@@ -223,3 +449,30 @@ class SystemV3(System):
                 sensor.sensor_data = sensor_data
             else:
                 self.sensors[sensor_data["serial"]] = SensorV3(sensor_data)
+
+    async def _update_settings(self, cached: bool = True) -> None:
+        """Update system settings."""
+        settings_resp = await self.api.request(
+            "get",
+            "ss3/subscriptions/{0}/settings/pins".format(self.system_id),
+            params={"forceUpdate": str(not cached).lower()},
+        )
+
+        if settings_resp:
+            self._settings_info = settings_resp
+
+    async def get_pins(self, cached: bool = True) -> Dict[str, str]:
+        """Return all of the set PINs, including master and duress."""
+        await self._update_settings(cached)
+
+        pins = {
+            CONF_MASTER_PIN: self._settings_info["settings"]["pins"]["master"]["pin"],
+            CONF_DURESS_PIN: self._settings_info["settings"]["pins"]["duress"]["pin"],
+        }
+
+        for user_pin in [
+            p for p in self._settings_info["settings"]["pins"]["users"] if p["pin"]
+        ]:
+            pins[user_pin["name"]] = user_pin["pin"]
+
+        return pins
