@@ -28,6 +28,8 @@ usage of these properties is solely your responsibility.**
     simplisafe.user_id
     # >>> 1234567
 
+.. _refreshing-access-tokens:
+
 Refreshing Access Tokens
 ************************
 
@@ -39,7 +41,7 @@ when it comes time to re-authenticate, simply:
 .. code:: python
 
     simplisafe = await simplipy.API.login_via_token(
-        "<REFRESH TOKEN>", session=session
+        "<REFRESH TOKEN>", client_id="<UNIQUE IDENTIFIER>", session=session
     )
 
 During usage, ``simplipy`` will automatically refresh the access token as needed.
@@ -48,7 +50,7 @@ At any point, the "dirtiness" of the token can be checked:
 .. code:: python
 
     simplisafe = await simplipy.API.login_via_token(
-        "<REFRESH TOKEN>", session=session
+        "<REFRESH TOKEN>", client_id="<UNIQUE IDENTIFIER>", session=session
     )
 
     # Assuming the access token was automatically refreshed:
@@ -66,7 +68,7 @@ Errors/Exceptions
 
 * :meth:`SimplipyError <simplipy.errors.SimplipyError>`: a base error that all other
   ``simplipy`` errors inherit from
-* :meth:`InvalidCredentialsError <simplipy.errors.InvalidCredentialsError>`: an error
+* :meth:`RequestError <simplipy.errors.RequestError>`: an error
   related to an invalid username/password combo
 * :meth:`PinError <simplipy.errors.PinError>`: an error related to an invalid PIN
   operation, such as attempting to delete a reserved PIN (e.g., "master"), adding too
