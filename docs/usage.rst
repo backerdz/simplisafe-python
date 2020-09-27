@@ -89,8 +89,7 @@ completes, you should see a message like this:
     parameter in future API calls
 
 (Note that technically, the above message results from a
-:meth:`PendingAuthorizationError <simplipy.errors.PendingAuthorizationError>`)
-exception.)
+:meth:`PendingAuthorizationError <simplipy.errors.PendingAuthorizationError>` exception.)
 
 5. Check your email. You should see an email from SimpliSafe™ asking you to verify a
    new device access – note that the User-Agent header shown in the email should include
