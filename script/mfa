@@ -5,11 +5,7 @@ import logging
 import sys
 
 from simplipy import API
-from simplipy.errors import PendingAuthorizationError, RequestError, SimplipyError
-
-SIMPLISAFE_CLIENT_ID = "<CLIENT ID>"
-SIMPLISAFE_EMAIL = "<EMAIL ADDRESS>"  # nosec
-SIMPLISAFE_PASSWORD = "<PASSWORD>"  # nosec
+from simplipy.errors import PendingAuthorizationError
 
 
 async def main() -> None:
