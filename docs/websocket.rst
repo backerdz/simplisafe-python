@@ -120,14 +120,14 @@ Response Format
 The ``event`` argument shown above is a :meth:`simplipy.websocket.WebsocketEvent`
 object, which comes with several properties:
 
-``changed_by``: the PIN that caused the event (in the case of arming/disarming/etc.)
-``event_type``: the type of event (see below)
-``info``: a longer string describing the event
-``sensor_name``: the name of the entity that triggered the event
-``sensor_serial``: the serial number of the entity that triggered the event
-``sensor_type``: the type of the entity that triggered the event
-``system_id``: the SimpliSafe™ system ID
-``timestamp``: the UTC timestamp that the event occurred
+* ``changed_by``: the PIN that caused the event (in the case of arming/disarming/etc.)
+* ``event_type``: the type of event (see below)
+* ``info``: a longer string describing the event
+* ``sensor_name``: the name of the entity that triggered the event
+* ``sensor_serial``: the serial number of the entity that triggered the event
+* ``sensor_type``: the type of the entity that triggered the event
+* ``system_id``: the SimpliSafe™ system ID
+* ``timestamp``: the UTC timestamp that the event occurred
 
 The ``event_type`` property will be one of the following values:
 
