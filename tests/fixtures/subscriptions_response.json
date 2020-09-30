@@ -1,98 +1,192 @@
 {
-    "subscriptions": [
-        {
-            "uid": 12345,
-            "sid": 12345,
-            "sStatus": 20,
-            "activated": 1445034752,
-            "planName": "24/7 Interactive Alarm Monitoring + Alerts",
-            "pinUnlocked": true,
-            "location": {
-                "sid": 12345,
-                "uid": 12345,
-                "account": 12345,
-                "street1": "1234 Main Street",
-                "street2": "",
-                "locationName": "",
-                "city": "Atlantis",
-                "state": "UW",
-                "zip": "12345",
-                "county": "SEA",
-                "notes": "",
-                "residenceType": 2,
-                "numAdults": 2,
-                "numChildren": 0,
-                "safeWord": "panic",
-                "signature": "John Allen Doe",
-                "timeZone": 2,
-                "primaryContacts": [
-                    {
-                        "name": "John Doe",
-                        "phone": "1234567890"
-                    }
-                ],
-                "secondaryContacts": [
-                    {
-                        "name": "Jane Doe",
-                        "phone": "9876543210"
-                    }
-                ],
-                "copsOptIn": false,
-                "smashSafeOptIn": false,
-                "certificateUri": "https://simplisafe.com/account2/12345/alarm-certificate",
-                "locationOffset": -360,
-                "nestStructureId": "",
-                "system": {
-                    "serial": "1234ABCD",
-                    "alarmState": "OFF",
-                    "alarmStateTimestamp": 0,
-                    "isAlarming": false,
-                    "version": 3,
-                    "temperature": 67,
-                    "exitDelayRemaining": 60,
-                    "cameras": [],
-                    "connType": "wifi",
-                    "stateUpdated": 1573331519,
-                    "messages": [
-                        {
-                            "_id": "xxxxxxxxxxxxxxxxxxxxxxxx",
-                            "id": "xxxxxxxxxxxxxxxxxxxxxxxx",
-                            "textTemplate": "Power Outage - Backup battery in use.",
-                            "data": {
-                                "time": "2020-02-16T03:20:28+00:00"
-                            },
-                            "text": "Power Outage - Backup battery in use.",
-                            "code": "2000",
-                            "filters": [],
-                            "link": "http://link.to.info",
-                            "linkLabel": "More Info",
-                            "expiration": 0,
-                            "category": "error",
-                            "timestamp": 1581823228
-                        }
-                    ],
-                    "powerOutage": false,
-                    "lastPowerOutage": 1570722271,
-                    "lastSuccessfulWifiTS": 1573246093,
-                    "isOffline": false
-                }
-            },
-            "currency": "USD",
-            "country": "US",
-            "data": "",
-            "billDate": 1537187552,
-            "features": {
-                "monitoring": true,
-                "alerts": true,
-                "online": true,
-                "hazard": false,
-                "video": false
-            },
-            "creditCard": {
-                "type": "Mastercard",
-                "lastFour": "1234"
-            },
-            "pinUnlockedBy": "pin"
+  "subscriptions": [
+    {
+      "uid": 12345,
+      "sid": 12345,
+      "sStatus": 20,
+      "activated": 1445034752,
+      "planSku": "SSEDSM2",
+      "planName": "Interactive Monitoring",
+      "price": 24.99,
+      "currency": "USD",
+      "country": "US",
+      "expires": 1602887552,
+      "canceled": 0,
+      "extraTime": 0,
+      "creditCard": {
+        "lastFour": "",
+        "type": "",
+        "ppid": "ABCDE12345",
+        "uid": 12345
+      },
+      "time": 2628000,
+      "paymentProfileId": "ABCDE12345",
+      "features": {
+        "monitoring": true,
+        "alerts": true,
+        "online": true,
+        "hazard": true,
+        "video": true,
+        "cameras": 10,
+        "dispatch": true,
+        "proInstall": false,
+        "discount": 0,
+        "vipCS": false,
+        "medical": true,
+        "careVisit": false,
+        "storageDays": 30
+      },
+      "status": {
+        "hasBaseStation": true,
+        "isActive": true,
+        "monitoring": "Active"
+      },
+      "subscriptionFeatures": {
+        "monitoredSensorsTypes": [
+          "Entry",
+          "Motion",
+          "GlassBreak",
+          "Smoke",
+          "CO",
+          "Freeze",
+          "Water"
+        ],
+        "monitoredPanicConditions": [
+          "Fire",
+          "Medical",
+          "Duress"
+        ],
+        "dispatchTypes": [
+          "Police",
+          "Fire",
+          "Medical",
+          "Guard"
+        ],
+        "remoteControl": [
+          "ArmDisarm",
+          "LockUnlock",
+          "ViewSettings",
+          "ConfigureSettings"
+        ],
+        "cameraFeatures": {
+          "liveView": true,
+          "maxRecordingCameras": 10,
+          "recordingStorageDays": 30,
+          "videoVerification": true
+        },
+        "support": {
+          "level": "Basic",
+          "annualVisit": false,
+          "professionalInstall": false
+        },
+        "cellCommunicationBackup": true,
+        "alertChannels": [
+          "Push",
+          "SMS",
+          "Email"
+        ],
+        "alertTypes": [
+          "Alarm",
+          "Error",
+          "Activity",
+          "Camera"
+        ],
+        "alarmModes": [
+          "Alarm",
+          "SecretAlert",
+          "Disabled"
+        ],
+        "supportedIntegrations": [
+          "GoogleAssistant",
+          "AmazonAlexa",
+          "AugustLock"
+        ],
+        "timeline": {}
+      },
+      "dispatcher": "cops",
+      "dcid": 0,
+      "location": {
+        "sid": 12345,
+        "uid": 12345,
+        "lStatus": 10,
+        "account": "1234ABCD",
+        "street1": "1234 Main Street",
+        "street2": "",
+        "locationName": "",
+        "city": "Atlantis",
+        "county": "SEA",
+        "state": "UW",
+        "zip": "12345",
+        "country": "US",
+        "crossStreet": "River 1 and River 2",
+        "notes": "",
+        "residenceType": 2,
+        "numAdults": 2,
+        "numChildren": 0,
+        "locationOffset": -360,
+        "safeWord": "TRITON",
+        "signature": "Atlantis Citizen 1",
+        "timeZone": 2,
+        "primaryContacts": [
+          {
+            "name": "John Doe",
+            "phone": "1234567890"
+          }
+        ],
+        "secondaryContacts": [
+          {
+            "name": "Jane Doe",
+            "phone": "9876543210"
+          }
+        ],
+        "copsOptIn": false,
+        "certificateUri": "https://simplisafe.com/account2/12345/alarm-certificate/12345",
+        "nestStructureId": "",
+        "system": {
+          "serial": "1234ABCD",
+          "alarmState": "OFF",
+          "alarmStateTimestamp": 0,
+          "isAlarming": false,
+          "version": 3,
+          "capabilities": {
+            "setWifiOverCell": true,
+            "setDoorbellChimeVolume": true,
+            "outdoorBattCamera": true
+          },
+          "temperature": 67,
+          "exitDelayRemaining": 60,
+          "cameras": [],
+          "connType": "wifi",
+          "stateUpdated": 1601502948,
+          "messages": [
+            {
+              "_id": "xxxxxxxxxxxxxxxxxxxxxxxx",
+              "id": "xxxxxxxxxxxxxxxxxxxxxxxx",
+              "textTemplate": "Power Outage - Backup battery in use.",
+              "data": {
+                "time": "2020-02-16T03:20:28+00:00"
+              },
+              "text": "Power Outage - Backup battery in use.",
+              "code": "2000",
+              "filters": [],
+              "link": "http://link.to.info",
+              "linkLabel": "More Info",
+              "expiration": 0,
+              "category": "error",
+              "timestamp": 1581823228
+            }
+          ],
+          "powerOutage": false,
+          "lastPowerOutage": 1581991064,
+          "lastSuccessfulWifiTS": 1601424776,
+          "isOffline": false
         }
-    ]
+      },
+      "pinUnlocked": true,
+      "billDate": 1602887552,
+      "billInterval": 2628000,
+      "pinUnlockedBy": "pin",
+      "autoActivation": null
+    }
+  ]
 }
