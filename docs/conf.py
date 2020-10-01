@@ -22,7 +22,7 @@ copyright = "2020, Aaron Bach"
 author = "Aaron Bach"
 
 # The full version, including alpha/beta/rc tags
-release = "9.4.0"
+release = "9.4.1"
 
 
 # -- General configuration ---------------------------------------------------
