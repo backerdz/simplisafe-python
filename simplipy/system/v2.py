@@ -6,12 +6,34 @@ from typing import Dict
 from simplipy.system import (
     CONF_DURESS_PIN,
     CONF_MASTER_PIN,
+    DEFAULT_MAX_USER_PINS,
     System,
     SystemStates,
-    create_pin_payload,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def create_pin_payload(pins: dict) -> Dict[str, Dict[str, Dict[str, str]]]:
+    """Create the request payload to send for updating PINs."""
+    duress_pin = pins.pop(CONF_DURESS_PIN)
+    master_pin = pins.pop(CONF_MASTER_PIN)
+
+    payload = {
+        "pins": {CONF_DURESS_PIN: {"value": duress_pin}, "pin1": {"value": master_pin}}
+    }
+
+    empty_user_index = len(pins)
+    for idx, (label, pin) in enumerate(pins.items()):
+        payload["pins"][f"pin{idx + 2}"] = {"name": label, "value": pin}
+
+    for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
+        payload["pins"][f"pin{str(idx + 2 + empty_user_index)}"] = {
+            "name": "",
+            "pin": "",
+        }
+
+    return payload
 
 
 class SystemV2(System):
@@ -32,7 +54,7 @@ class SystemV2(System):
         await self._api.request(
             "post",
             f"subscriptions/{self.system_id}/pins",
-            json=create_pin_payload(pins, version=2),
+            json=create_pin_payload(pins),
         )
 
     async def _set_state(self, value: Enum) -> None:

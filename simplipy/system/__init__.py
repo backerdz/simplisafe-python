@@ -61,47 +61,6 @@ def guard_from_missing_data(default_value: Any = None):
     return decorator
 
 
-def create_pin_payload(pins: dict, *, version: int = VERSION_V3) -> dict:
-    """Create the appropriate PIN payload for the provided version."""
-    if version == VERSION_V2:
-        payload = {
-            "pins": {
-                CONF_DURESS_PIN: {"value": pins.pop(CONF_DURESS_PIN)},
-                "pin1": {"value": pins.pop(CONF_MASTER_PIN)},
-            }
-        }
-
-        empty_user_index = len(pins)
-        for idx, (label, pin) in enumerate(pins.items()):
-            payload["pins"][f"pin{idx + 2}"] = {"name": label, "value": pin}
-
-        for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
-            payload["pins"][f"pin{str(idx + 2 + empty_user_index)}"] = {
-                "name": "",
-                "pin": "",
-            }
-    else:
-        payload = {
-            "pins": {
-                CONF_DURESS_PIN: {"pin": pins.pop(CONF_DURESS_PIN)},
-                CONF_MASTER_PIN: {"pin": pins.pop(CONF_MASTER_PIN)},
-                "users": {},
-            }
-        }
-
-        for idx, (label, pin) in enumerate(pins.items()):
-            payload["pins"]["users"][str(idx)] = {"name": label, "pin": pin}
-
-        empty_user_index = len(pins)
-        for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
-            payload["pins"]["users"][str(idx + empty_user_index)] = {
-                "name": "",
-                "pin": "",
-            }
-
-    return payload
-
-
 def get_entity_class(
     entity_type: EntityTypes, *, version: int = VERSION_V3
 ) -> Type[Entity]:
