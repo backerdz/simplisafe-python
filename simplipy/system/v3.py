@@ -85,17 +85,14 @@ def create_pin_payload(pins: dict) -> Dict[str, Dict[str, Dict[str, str]]]:
         }
     }
 
-    user_pins = {}
     for idx, (label, pin) in enumerate(pins.items()):
         user_pins[str(idx)] = {"name": label, "pin": pin}
 
     empty_user_index = len(pins)
-    for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
-        user_pins[str(idx + empty_user_index)] = {
+    user_pins = {str(idx + empty_user_index): {
             "name": "",
             "pin": "",
-        }
-
+        } for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index)}
     payload["users"] = user_pins
 
     return payload
