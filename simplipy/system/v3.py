@@ -8,8 +8,8 @@ import voluptuous as vol
 from simplipy.system import (
     CONF_DURESS_PIN,
     CONF_MASTER_PIN,
+    DEFAULT_MAX_USER_PINS,
     System,
-    create_pin_payload,
     guard_from_missing_data,
 )
 
@@ -71,6 +71,34 @@ SYSTEM_PROPERTIES_PAYLOAD_SCHEMA = vol.Schema(
         ),
     }
 )
+
+
+def create_pin_payload(pins: dict) -> Dict[str, Dict[str, Dict[str, str]]]:
+    """Create the request payload to send for updating PINs."""
+    duress_pin = pins.pop(CONF_DURESS_PIN)
+    master_pin = pins.pop(CONF_MASTER_PIN)
+
+    payload = {
+        "pins": {
+            CONF_DURESS_PIN: {"pin": duress_pin},
+            CONF_MASTER_PIN: {"pin": master_pin},
+        }
+    }
+
+    user_pins = {}
+    for idx, (label, pin) in enumerate(pins.items()):
+        user_pins[str(idx)] = {"name": label, "pin": pin}
+
+    empty_user_index = len(pins)
+    for idx in range(DEFAULT_MAX_USER_PINS - empty_user_index):
+        user_pins[str(idx + empty_user_index)] = {
+            "name": "",
+            "pin": "",
+        }
+
+    payload["users"] = user_pins
+
+    return payload
 
 
 class SystemV3(System):
