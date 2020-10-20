@@ -109,6 +109,8 @@ class SystemV3(System):
     def __init__(self, api: "API", system_id: int) -> None:
         """Initialize."""
         super().__init__(api, system_id)
+
+        # This will be filled in by the appropriate data update methods:
         self.camera_data: Dict[str, dict] = {}
         self.settings_data: Dict[str, dict] = {}
 
