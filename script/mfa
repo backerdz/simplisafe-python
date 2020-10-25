@@ -15,8 +15,11 @@ async def main() -> None:
         try:
             email = input("What is your SimpliSafe email address? ")
             password = input("What is your SimpliSafe email password? ")
+            client_id = input("(optional) What is your SimpliSafe client ID? ")
 
-            await API.login_via_credentials(email, password, client_id=None)
+            await API.login_via_credentials(
+                email, password, client_id=client_id or None
+            )
         except PendingAuthorizationError as err:
             print(str(err))
             sys.exit(0)
