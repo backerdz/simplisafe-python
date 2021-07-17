@@ -1,5 +1,4 @@
 """Define a SimpliSafe account."""
-import asyncio
 import base64
 from json.decoder import JSONDecodeError
 from typing import Dict, Optional, Union
@@ -7,10 +6,12 @@ from uuid import uuid4
 
 from aiohttp import ClientSession, ClientTimeout
 from aiohttp.client_exceptions import ClientError
+import backoff
 
 from simplipy.const import LOGGER
 from simplipy.errors import (
-    EndpointUnavailable,
+    CredentialsExpiredError,
+    EndpointUnavailableError,
     InvalidCredentialsError,
     PendingAuthorizationError,
     RequestError,
@@ -81,11 +82,23 @@ class API:  # pylint: disable=too-many-instance-attributes
         )
         self._email = email
         self._password = password
-        self._reauth_tried = False
-        self._refresh_tried = False
-        self._request_retries = request_retries
-        self._request_retry_interval = request_retry_interval
         self._session: ClientSession = session
+
+        # Implement a public version of the request method that has appropriate retry,
+        # backoff, and when appropriate, reauthentication logic:
+        self.request = backoff.on_exception(
+            backoff.constant,
+            RequestError,
+            interval=request_retry_interval,
+            max_tries=request_retries,
+        )(
+            backoff.on_exception(
+                backoff.constant,
+                CredentialsExpiredError,
+                interval=request_retry_interval,
+                on_backoff=self._handle_credentials_expired,
+            )(self._request)
+        )
 
         # These will get filled in after initial authentication:
         self._access_token: Optional[str] = None
@@ -97,10 +110,10 @@ class API:  # pylint: disable=too-many-instance-attributes
         """Authenticate the API object using an authentication payload."""
         LOGGER.debug("Authentication payload: %s", payload)
 
-        token_resp = await self._single_request("post", "api/token", json=payload)
+        token_resp = await self._request("post", "api/token", json=payload)
 
         if "mfa_token" in token_resp:
-            mfa_challenge_response = await self._single_request(
+            mfa_challenge_response = await self._request(
                 "post",
                 "api/mfa/challenge",
                 json={
@@ -110,7 +123,7 @@ class API:  # pylint: disable=too-many-instance-attributes
                 },
             )
 
-            await self._single_request(
+            await self._request(
                 "post",
                 "api/token",
                 json={
@@ -132,10 +145,24 @@ class API:  # pylint: disable=too-many-instance-attributes
         self._refresh_token = token_resp["refresh_token"]
 
         # Fetch the SimpliSafe user ID:
-        auth_check_resp = await self._single_request("get", "api/authCheck")
+        auth_check_resp = await self._request("get", "api/authCheck")
         self.user_id = auth_check_resp["userId"]
 
-    async def _refresh_access_token(self, refresh_token: Optional[str]) -> None:
+    async def _handle_credentials_expired(self, _: dict) -> None:
+        """Handle a CredentialsExpiredError."""
+        LOGGER.info("401 detected; attempting refresh token")
+
+        try:
+            await self._refresh_access_token()
+        except CredentialsExpiredError:
+            LOGGER.info("Another 401 detected; attempting full reauth")
+
+            try:
+                await self.login()
+            except CredentialsExpiredError as err:
+                raise InvalidCredentialsError("Refresh and reauth failed") from err
+
+    async def _refresh_access_token(self) -> None:
         """Regenerate an access token.
 
         :param refresh_token: The refresh token to use
@@ -145,14 +172,26 @@ class API:  # pylint: disable=too-many-instance-attributes
             {
                 "grant_type": "refresh_token",
                 "client_id": self._client_id,
-                "refresh_token": refresh_token,
+                "refresh_token": self._refresh_token,
             }
         )
 
-    async def _single_request(  # pylint: disable=too-many-statements,too-many-branches
+    async def _request(  # pylint: disable=too-many-branches
         self, method: str, endpoint: str, **kwargs
     ) -> dict:
-        """Make a single API request."""
+        """Execute an API request.
+
+        :param method: The HTTP method to use
+        :type method: ``str``
+        :param endpoint: The relative SimpliSafe API endpoint to hit
+        :type endpoint: ``str``
+        :param request_retries: The default number of request retries to use
+        :type request_retries: ``int``
+        :param request_retry_interval: The default retry delay
+        :type request_retry_interval: ``int``
+        :rtype: ``dict``
+        """
+        data = {}
         kwargs.setdefault("headers", {})
         if self._access_token:
             kwargs["headers"]["Authorization"] = f"Bearer {self._access_token}"
@@ -167,7 +206,6 @@ class API:  # pylint: disable=too-many-instance-attributes
         else:
             session = ClientSession(timeout=ClientTimeout(total=DEFAULT_TIMEOUT))
 
-        data = {}
         try:
             async with session.request(
                 method, f"{API_URL_BASE}/{endpoint}", **kwargs
@@ -198,40 +236,24 @@ class API:  # pylint: disable=too-many-instance-attributes
                 return data
 
             if data.get("type") == "NoRemoteManagement":
-                raise EndpointUnavailable(
+                raise EndpointUnavailableError(
                     f"Endpoint unavailable in plan: {endpoint}"
-                ) from None
+                ) from err
 
             if "401" in str(err):
                 if not self._access_token:
-                    raise InvalidCredentialsError("Invalid credentials") from err
-
-                if not self._refresh_tried:
-                    LOGGER.info("401 detected; attempting refresh token")
-                    self._refresh_tried = True
-                    await self._refresh_access_token(self._refresh_token)
-                    return await self._single_request(method, endpoint, **kwargs)
-
-                if not self._reauth_tried:
-                    LOGGER.info("Another 401 detected; attempting full reauth")
-                    self._reauth_tried = True
-                    await self.login()
-                    return await self._single_request(method, endpoint, **kwargs)
-
-                raise InvalidCredentialsError("Invalid credentials") from err
+                    raise InvalidCredentialsError("Invalid username/password") from err
+                raise CredentialsExpiredError(err) from err
 
             if "403" in str(err):
-                raise InvalidCredentialsError("Unauthorized") from None
+                raise InvalidCredentialsError("Unauthorized") from err
 
-            raise err
+            raise RequestError(err) from err
         finally:
             if not use_running_session:
                 await session.close()
 
         LOGGER.debug("Data received from /%s: %s", endpoint, data)
-
-        self._refresh_tried = False
-        self._reauth_tried = False
 
         return data
 
@@ -282,37 +304,6 @@ class API:  # pylint: disable=too-many-instance-attributes
             systems[system_id] = system
 
         return systems
-
-    async def request(self, method: str, endpoint: str, **kwargs) -> dict:
-        """Make an API request (with retry logic).
-
-        :param method: The HTTP method to use
-        :type method: ``str``
-        :param endpoint: The relative SimpliSafe API endpoint to hit
-        :type endpoint: ``str``
-        :rtype: ``dict``
-        """
-        retries = 0
-        while retries < self._request_retries:
-            try:
-                data = await self._single_request(method, endpoint, **kwargs)
-                break
-            except ClientError as err:
-                LOGGER.warning(
-                    "Error while requesting /%s: %s (attempt %s of %s)",
-                    endpoint,
-                    err,
-                    retries + 1,
-                    self._request_retries,
-                )
-                retries += 1
-                await asyncio.sleep(self._request_retry_interval)
-        else:
-            raise RequestError(
-                f"Requesting /{endpoint} failed after {retries} tries"
-            ) from None
-
-        return data
 
     async def update_subscription_data(self) -> None:
         """Update our internal "raw data" listing of subscriptions."""
